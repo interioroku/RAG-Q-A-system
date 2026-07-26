@@ -1,6 +1,12 @@
 import os
+from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import OpenAIEmbeddings
+from langchain_chroma import Chroma
+
+# Load environment variables from .env
+load_dotenv()
 
 def load_documents(directory):
     documents = []
@@ -50,3 +56,16 @@ if __name__ == "__main__":
             print(f"Source: {chunks[0].metadata.get('source')}")
             print(f"Content Preview:\n{chunks[0].page_content}")
             print("--------------------")
+            
+            # Embed and persist the chunks in Chroma vector store
+            print("Embedding chunks and saving to local Chroma collection...")
+            embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+            persist_directory = "./chroma_db"
+            
+            Chroma.from_documents(
+                documents=chunks,
+                embedding=embeddings,
+                persist_directory=persist_directory,
+                collection_name="rag-collection"
+            )
+            print(f"Successfully embedded and stored {len(chunks)} chunks in '{persist_directory}'.")
