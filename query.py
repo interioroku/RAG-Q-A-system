@@ -7,11 +7,11 @@ from langchain_core.prompts import ChatPromptTemplate
 # Load environment variables from .env
 load_dotenv()
 
-def retrieve_chunks(query, k=2):
+def load_vector_store():
     persist_directory = "./chroma_db"
     if not os.path.exists(persist_directory):
         print(f"Error: Vector store directory '{persist_directory}' does not exist. Please run ingest.py first.")
-        return []
+        return None
         
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
     
@@ -21,7 +21,11 @@ def retrieve_chunks(query, k=2):
         embedding_function=embeddings,
         collection_name="rag-collection"
     )
-    
+    return vector_store
+
+def retrieve_chunks(vector_store, query, k=2):
+    if vector_store is None:
+        return []
     # Perform similarity search with distance score (lower score = higher similarity)
     results = vector_store.similarity_search_with_score(query, k=k)
     return results
@@ -54,28 +58,44 @@ def generate_answer(query, retrieved_docs):
     return response.content
 
 if __name__ == "__main__":
-    queries = [
-        "What is the training budget for employees?",
-        "What is the company's policy on office pets?"
-    ]
-    
-    for q in queries:
-        print("=" * 60)
-        print(f"Query: '{q}'")
-        print("=" * 60)
-        print("Retrieving relevant chunks from Chroma...")
-        results = retrieve_chunks(q, k=2)
+    print("Loading vector database...")
+    vector_store = load_vector_store()
+    if vector_store is None:
+        exit(1)
         
-        if not results:
-            print("No matching chunks found in database.")
+    print("\n" + "=" * 60)
+    print("Interactive RAG Q&A System Active!")
+    print("Type your questions below. Type 'exit' or 'quit' to end.")
+    print("=" * 60 + "\n")
+    
+    while True:
+        try:
+            query = input("Ask a question: ")
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting. Goodbye!")
+            break
+            
+        query = query.strip()
+        if not query:
             continue
             
-        print(f"Retrieved {len(results)} chunks. Generating answer...")
-        answer = generate_answer(q, results)
+        if query.lower() in ["exit", "quit"]:
+            print("Exiting. Goodbye!")
+            break
+            
+        print("Retrieving context...")
+        results = retrieve_chunks(vector_store, query, k=2)
+        
+        if not results:
+            print("No matching context chunks found in database.")
+            continue
+            
+        print("Generating answer...")
+        answer = generate_answer(query, results)
         
         print("\n--- Answer ---")
         print(answer)
         print("\n--- Source Chunks Used ---")
         for idx, (doc, score) in enumerate(results, 1):
             print(f"[{idx}] Source: {doc.metadata.get('source')} (Distance: {score:.4f})")
-        print("\n")
+        print("\n" + "-" * 60 + "\n")
