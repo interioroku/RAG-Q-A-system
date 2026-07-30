@@ -4,9 +4,9 @@ An incremental Retrieval-Augmented Generation (RAG) Q&A system built in Python u
 
 ---
 
-## Current Status: Completed Stage 6
+## Current Status: Completed Stage 7
 
-We have completed the core command-line RAG pipeline with conversational memory, allowing for multi-turn dialogues and follow-up question refinement.
+We have completed the RAG pipeline with advanced hybrid search (BM25 keyword search + Chroma vector search) and local cross-encoder reranking (using FlashRank's ms-marco-MiniLM-L-12-v2 model).
 
 ### Project Structure
 - `docs/`: Holds the local document library (e.g., Markdown, Text, and PDF files).
@@ -43,6 +43,11 @@ We have completed the core command-line RAG pipeline with conversational memory,
 - Adds structured history logs using `HumanMessage` and `AIMessage`.
 - Automatically refines follow-up queries (e.g. converting *"What can it be spent on?"* to *"What types of expenses can the employee training budget be used for?"*) before querying the database.
 
+### 7. Stage 7: Advanced Retrieval
+- Combines sparse keyword-based retrieval (BM25) and dense semantic retrieval (Chroma) via Reciprocal Rank Fusion (`EnsembleRetriever`).
+- Reranks top candidates using a local cross-encoder model (`ms-marco-MiniLM-L-12-v2` via `flashrank`) to optimize context selection for the generator LLM.
+- Presents real-time `Relevance Scores` in the source logs.
+
 ---
 
 ## How to Run
@@ -54,7 +59,7 @@ We have completed the core command-line RAG pipeline with conversational memory,
    ```
 2. Install dependencies:
    ```bash
-   .\venv\Scripts\pip install langchain langchain-community langchain-text-splitters pypdf python-dotenv langchain-openai langchain-chroma
+   .\venv\Scripts\pip install -r requirements.txt
    ```
 3. Create a `.env` file at the root containing your OpenAI API Key:
    ```env
@@ -78,11 +83,9 @@ Type your questions. Type `exit` or `quit` to end the session.
 ---
 
 ## Next Steps / Future Work
+
 When returning to this project, the next planned enhancements are:
-1. **Stage 7: Advanced Retrieval**
-   - Implement hybrid keyword search (BM25) combined with semantic vector search.
-   - Integrate cross-encoder reranking (e.g., Cohere/HuggingFace) to improve retrieval precision.
-2. **Stage 8: Web UI (Streamlit)**
+1. **Stage 8: Web UI (Streamlit)**
    - Develop a visual dashboard for uploading documents, adjusting chunk parameters, displaying retrieval logs, and conversing with the system in a browser UI.
-3. **Stage 9: RAG Assessment**
+2. **Stage 9: RAG Assessment**
    - Add RAG evaluation frameworks (e.g., Ragas or TruLens) to measure faithfulness, answer relevance, and context recall.

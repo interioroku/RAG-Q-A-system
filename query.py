@@ -4,6 +4,10 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
+from langchain_community.retrievers import BM25Retriever
+from langchain_classic.retrievers import EnsembleRetriever, ContextualCompressionRetriever
+from langchain_community.document_compressors import FlashrankRerank
+from langchain_core.documents import Document
 
 # Load environment variables from .env
 load_dotenv()
@@ -24,11 +28,50 @@ def load_vector_store():
     )
     return vector_store
 
-def retrieve_chunks(vector_store, query, k=2):
+def initialize_retriever(vector_store, k=5):
     if vector_store is None:
+        return None
+        
+    # Retrieve all documents to fit the BM25 sparse retriever
+    db_data = vector_store.get()
+    docs = []
+    if db_data and "documents" in db_data:
+        metadatas = db_data.get("metadatas") or [{}] * len(db_data["documents"])
+        for text, metadata in zip(db_data["documents"], metadatas):
+            docs.append(Document(page_content=text, metadata=metadata))
+            
+    # Chroma dense retriever
+    chroma_retriever = vector_store.as_retriever(search_kwargs={"k": k})
+    
+    if not docs:
+        print("Warning: Vector store contains no documents. Falling back to vector search only.")
+        return chroma_retriever
+
+    # BM25 sparse retriever
+    bm25_retriever = BM25Retriever.from_documents(docs)
+    bm25_retriever.k = k
+    
+    # Reciprocal Rank Fusion ensemble
+    ensemble_retriever = EnsembleRetriever(
+        retrievers=[bm25_retriever, chroma_retriever],
+        weights=[0.4, 0.6]
+    )
+    
+    # Local cross-encoder reranker
+    compressor = FlashrankRerank(model="ms-marco-MiniLM-L-12-v2", top_n=2)
+    
+    # Wrapped compressed retriever
+    compression_retriever = ContextualCompressionRetriever(
+        base_compressor=compressor,
+        base_retriever=ensemble_retriever
+    )
+    
+    return compression_retriever
+
+def retrieve_chunks(retriever, query):
+    if retriever is None:
         return []
-    # Perform similarity search with distance score (lower score = higher similarity)
-    results = vector_store.similarity_search_with_score(query, k=k)
+    results = retriever.invoke(query)
     return results
 
 def rephrase_question(llm, query, chat_history):
@@ -51,7 +94,7 @@ def rephrase_question(llm, query, chat_history):
 
 def generate_answer(llm, query, retrieved_docs, chat_history):
     # Combine content of retrieved docs as context
-    context = "\n\n".join([doc.page_content for doc, _ in retrieved_docs])
+    context = "\n\n".join([doc.page_content for doc in retrieved_docs])
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", (
@@ -80,6 +123,9 @@ if __name__ == "__main__":
     if vector_store is None:
         exit(1)
         
+    print("Initializing Hybrid Retriever and Reranker (this might take a moment on first load)...")
+    retriever = initialize_retriever(vector_store, k=5)
+    
     # Initialize the LLM (gpt-4o-mini is efficient and fast)
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     
@@ -87,7 +133,7 @@ if __name__ == "__main__":
     chat_history = []
         
     print("\n" + "=" * 60)
-    print("Interactive RAG Q&A System Active (with Conversational Memory)!")
+    print("Interactive RAG Q&A System Active (with Hybrid Search & Reranking)!")
     print("Type your questions below. Type 'exit' or 'quit' to end.")
     print("=" * 60 + "\n")
     
@@ -114,7 +160,7 @@ if __name__ == "__main__":
                 print(f"[Refined Query: '{rephrased_query}']")
             
         print("Retrieving context...")
-        results = retrieve_chunks(vector_store, rephrased_query, k=2)
+        results = retrieve_chunks(retriever, rephrased_query)
         
         if not results:
             print("No matching context chunks found in database.")
@@ -126,8 +172,10 @@ if __name__ == "__main__":
         print("\n--- Answer ---")
         print(answer)
         print("\n--- Source Chunks Used ---")
-        for idx, (doc, score) in enumerate(results, 1):
-            print(f"[{idx}] Source: {doc.metadata.get('source')} (Distance: {score:.4f})")
+        for idx, doc in enumerate(results, 1):
+            score = doc.metadata.get('relevance_score')
+            score_str = f"{score:.4f}" if score is not None else "N/A"
+            print(f"[{idx}] Source: {doc.metadata.get('source')} (Relevance Score: {score_str})")
         print("\n" + "-" * 60 + "\n")
         
         # Append to chat history
