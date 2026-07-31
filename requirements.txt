@@ -7,3 +7,4 @@ langchain-openai
 langchain-chroma
 rank_bm25
 flashrank
+streamlit

@@ -24,6 +24,11 @@ RAG Q&A System is a production-grade, local-first **Retrieval-Augmented Generati
 *   **Context Constraints:** The prompt system explicitly bounds the LLM generator (`gpt-4o-mini`) to answer *only* using the provided source context.
 *   **Anti-Hallucination Fallback:** Instructs the LLM to output *"I don't know"* if the answer cannot be factually derived from the retrieved documents.
 
+### 🖥️ Interactive Web UI Dashboard
+*   **Modern Workspace:** Built with Streamlit, providing a dual-column screen separating the chat interface from the audit panel.
+*   **Live Parameter Tuning:** Ingest documents, adjust chunk sizes/overlaps, and slide retrieval candidate sizes (K) dynamically.
+*   **Visual Retrieval Explorer:** Collapsible source viewer showing document locations, text chunks, and exact rerank scores.
+
 ---
 
 ## 🏗️ Architecture & Component Flow
@@ -35,11 +40,12 @@ The pipeline follows a modular document ingestion, indexing, and retrieval lifec
 ```
   DOCUMENTS (PDF/MD/TXT) ──► INGESTION ──► SPLITTER ──► CHROMA DB (Dense) & BM25 (Sparse)
                                                                  ▲
-  CLIENT (Interactive Loop) ◄───► QUERY REPHRASER ◄──────────────┴───► LLM GENERATION
+  CLIENT (CLI / Streamlit UI) ◄──► QUERY REPHRASER ◄─────────────┴───► LLM GENERATION
 ```
 
 1.  **Ingestion ([ingest.py](file:///c:/Users/HP/RAG%20Q&A%20System/ingest.py)):** Scans a directory, parses files, splits texts into chunks of 500 characters (with 100 character overlap), generates vector embeddings, and saves them to a local Chroma vector index.
 2.  **Query Session ([query.py](file:///c:/Users/HP/RAG%20Q&A%20System/query.py)):** Initializes the conversational loop, instantiates the hybrid retriever and cross-encoder, and runs the Q&A workflow.
+3.  **Streamlit Dashboard ([app.py](file:///c:/Users/HP/RAG%20Q&A%20System/app.py)):** Provides a browser-based frontend for querying documents, uploading sources, tuning chunk parameters, and auditing retrieval metadata.
 
 ### Request Lifecycle Sequence
 
@@ -125,9 +131,14 @@ sequenceDiagram
     python ingest.py
     ```
 
-6.  **Start interactive Q&A Loop:**
+6.  **Start interactive Q&A Loop (CLI):**
     ```bash
     python query.py
+    ```
+
+7.  **Start Web UI Dashboard (Streamlit):**
+    ```bash
+    streamlit run app.py
     ```
 
 ---

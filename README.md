@@ -6,15 +6,17 @@ An incremental Retrieval-Augmented Generation (RAG) Q&A system built in Python u
 
 ---
 
-## Current Status: Completed Stage 7
+## Current Status: Completed Stage 8
 
-We have completed the RAG pipeline with advanced hybrid search (BM25 keyword search + Chroma vector search) and local cross-encoder reranking (using FlashRank's ms-marco-MiniLM-L-12-v2 model).
+We have completed the core command-line and Streamlit Web UI dashboard for the RAG Q&A system, allowing both interactive terminal querying and browser-based chat, document upload, and retrieval auditing.
 
 ### Project Structure
 - `docs/`: Holds the local document library (e.g., Markdown, Text, and PDF files).
 - `chroma_db/`: Directory where the local vector database is persisted.
-- `ingest.py`: Loads, chunks, embeds, and saves document vectors.
-- `query.py`: Interactive Q&A loop with conversational memory and follow-up query rephrasing.
+- `assets/`: Stores the project architecture diagrams and assets.
+- `ingest.py`: Loads, chunks, embeds, and saves document vectors (modular library & CLI).
+- `query.py`: Interactive Q&A loop with conversational memory and follow-up query rephrasing (modular library & CLI).
+- `app.py`: Streamlit-based web dashboard providing interactive chat, upload interface, chunk adjustments, and real-time retrieval audit logs.
 - `.env`: Configures API keys and tracing settings (ignored by Git).
 - `.gitignore`: Ensures venv, cache, database folders, and credentials are not committed.
 
@@ -50,6 +52,12 @@ We have completed the RAG pipeline with advanced hybrid search (BM25 keyword sea
 - Reranks top candidates using a local cross-encoder model (`ms-marco-MiniLM-L-12-v2` via `flashrank`) to optimize context selection for the generator LLM.
 - Presents real-time `Relevance Scores` in the source logs.
 
+### 8. Stage 8: Web UI (Streamlit)
+- Integrates a responsive, web-based chat interface using `streamlit`.
+- Embeds side-by-side components to separate the conversation from the search audit logs.
+- Exposes controls to adjust chunk parameters, upload source documents, and rebuild the Chroma vector database on-the-fly.
+- Renders detailed expander audit summaries showing refined queries and raw source chunks with relevance scores.
+
 ---
 
 ## How to Run
@@ -82,12 +90,17 @@ Run the interactive loop:
 ```
 Type your questions. Type `exit` or `quit` to end the session.
 
+### Step 3: Launch Streamlit Web UI (Optional Dashboard)
+Alternatively, start the web interface:
+```bash
+.\venv\Scripts\streamlit.exe run app.py
+```
+Open `http://localhost:8501` in your browser. This dashboard lets you upload files, configure chunk parameters, rebuild the database, and chat interactively while inspecting retrieval audit logs.
+
 ---
 
 ## Next Steps / Future Work
 
 When returning to this project, the next planned enhancements are:
-1. **Stage 8: Web UI (Streamlit)**
-   - Develop a visual dashboard for uploading documents, adjusting chunk parameters, displaying retrieval logs, and conversing with the system in a browser UI.
-2. **Stage 9: RAG Assessment**
+1. **Stage 9: RAG Assessment**
    - Add RAG evaluation frameworks (e.g., Ragas or TruLens) to measure faithfulness, answer relevance, and context recall.

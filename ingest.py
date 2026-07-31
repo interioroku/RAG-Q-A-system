@@ -32,40 +32,44 @@ def load_documents(directory):
             
     return documents
 
-def chunk_documents(documents):
+def chunk_documents(documents, chunk_size=500, chunk_overlap=100):
     # Splits documents into smaller chunks for retrieval
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=100
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap
     )
     return text_splitter.split_documents(documents)
+
+def run_ingestion(docs_dir="./docs", chunk_size=500, chunk_overlap=100):
+    if not os.path.exists(docs_dir):
+        os.makedirs(docs_dir, exist_ok=True)
+        
+    raw_docs = load_documents(docs_dir)
+    if not raw_docs:
+        return 0
+        
+    chunks = chunk_documents(raw_docs, chunk_size, chunk_overlap)
+    if not chunks:
+        return 0
+        
+    # Embed and persist the chunks in Chroma vector store
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    persist_directory = "./chroma_db"
+    
+    # Using from_documents recreates the collection with the new chunks
+    Chroma.from_documents(
+        documents=chunks,
+        embedding=embeddings,
+        persist_directory=persist_directory,
+        collection_name="rag-collection"
+    )
+    return len(chunks)
 
 if __name__ == "__main__":
     docs_dir = "./docs"
     print(f"Scanning directory: {docs_dir}")
-    raw_docs = load_documents(docs_dir)
-    print(f"Loaded {len(raw_docs)} document files/pages.")
-    
-    if not raw_docs:
-        print("No documents found. Please add text, markdown, or PDF files to the docs/ folder.")
+    num_chunks = run_ingestion(docs_dir)
+    if num_chunks == 0:
+        print("No documents found or ingested. Please add text, markdown, or PDF files to the docs/ folder.")
     else:
-        chunks = chunk_documents(raw_docs)
-        print(f"Created {len(chunks)} chunks.")
-        if chunks:
-            print("\n--- Sample Chunk ---")
-            print(f"Source: {chunks[0].metadata.get('source')}")
-            print(f"Content Preview:\n{chunks[0].page_content}")
-            print("--------------------")
-            
-            # Embed and persist the chunks in Chroma vector store
-            print("Embedding chunks and saving to local Chroma collection...")
-            embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-            persist_directory = "./chroma_db"
-            
-            Chroma.from_documents(
-                documents=chunks,
-                embedding=embeddings,
-                persist_directory=persist_directory,
-                collection_name="rag-collection"
-            )
-            print(f"Successfully embedded and stored {len(chunks)} chunks in '{persist_directory}'.")
+        print(f"Successfully embedded and stored {num_chunks} chunks in './chroma_db'.")
