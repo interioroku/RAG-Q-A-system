@@ -2,6 +2,8 @@
 
 An incremental Retrieval-Augmented Generation (RAG) Q&A system built in Python using LangChain, Chroma, and OpenAI.
 
+![RAG Q&A System - Architecture Diagram](assets/architecture_diagram.jpg)
+
 ---
 
 ## Current Status: Completed Stage 7

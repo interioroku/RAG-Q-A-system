@@ -28,6 +28,8 @@ RAG Q&A System is a production-grade, local-first **Retrieval-Augmented Generati
 
 ## 🏗️ Architecture & Component Flow
 
+![RAG Q&A System - Architecture Diagram](assets/architecture_diagram.jpg)
+
 The pipeline follows a modular document ingestion, indexing, and retrieval lifecycle:
 
 ```
