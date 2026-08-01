@@ -1,8 +1,39 @@
 import os
+import sys
+import types
 import streamlit as st
+import pandas as pd
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
+
+# Ragas import runtime monkeypatch to resolve deprecated Vertex AI paths
+try:
+    from langchain_google_vertexai import ChatVertexAI
+except ImportError:
+    ChatVertexAI = None
+
+if "langchain_community.chat_models" not in sys.modules:
+    sys.modules["langchain_community.chat_models"] = types.ModuleType("langchain_community.chat_models")
+
+mock_vertex = types.ModuleType("langchain_community.chat_models.vertexai")
+mock_vertex.ChatVertexAI = ChatVertexAI
+sys.modules["langchain_community.chat_models.vertexai"] = mock_vertex
+
+try:
+    from langchain_google_vertexai import VertexAI
+except ImportError:
+    VertexAI = None
+
+if "langchain_community.llms" not in sys.modules:
+    sys.modules["langchain_community.llms"] = types.ModuleType("langchain_community.llms")
+
+sys.modules["langchain_community.llms"].VertexAI = VertexAI
+
+# Ragas evaluation imports
+from ragas import evaluate
+from ragas.metrics import faithfulness, answer_relevancy
+from datasets import Dataset
 
 # Import existing modular functions to preserve repository design patterns
 from ingest import run_ingestion
@@ -161,6 +192,8 @@ if st.sidebar.button("🗑️ Reset Conversational Memory"):
     st.session_state.chat_history = []
     st.session_state.latest_rephrased_query = None
     st.session_state.latest_retrieval_results = None
+    if "latest_eval_result" in st.session_state:
+        del st.session_state.latest_eval_result
     st.sidebar.success("Memory cleared!")
     st.rerun()
 
@@ -169,85 +202,252 @@ vector_store = load_vector_store()
 if vector_store is None:
     st.warning("⚠️ Local Chroma Database not detected. Please upload documents in the sidebar and click **🔄 Rebuild Vector Store**.")
 else:
-    # Initialize main interface layout (Columns)
-    col1, col2 = st.columns([1.2, 0.8], gap="medium")
+    # Initialize main interface layout (Tabs)
+    tab1, tab2 = st.tabs(["💬 Chat & Audit", "📊 RAG Assessment Suite"])
 
-    # Column 1: Conversational Chat Interface
-    with col1:
-        st.markdown("### 💬 Conversational Chat")
-        
-        # Display chat logs
-        for message in st.session_state.chat_history:
-            if isinstance(message, HumanMessage):
+    with tab1:
+        # Columns layout inside tab
+        col1, col2 = st.columns([1.2, 0.8], gap="medium")
+
+        # Column 1: Conversational Chat Interface
+        with col1:
+            st.markdown("### 💬 Conversational Chat")
+            
+            # Display chat logs
+            for message in st.session_state.chat_history:
+                if isinstance(message, HumanMessage):
+                    with st.chat_message("user"):
+                        st.write(message.content)
+                elif isinstance(message, AIMessage):
+                    with st.chat_message("assistant"):
+                        st.write(message.content)
+                        
+            # Listen to user query
+            if prompt := st.chat_input("Ask a question about your stored documentation..."):
+                # Display user message instantly
                 with st.chat_message("user"):
-                    st.write(message.content)
-            elif isinstance(message, AIMessage):
+                    st.write(prompt)
+                    
+                # Initialize core models
+                llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+                
+                # 1. Standalone Query Refinement (Conversational memory)
+                rephrased_query = prompt
+                if st.session_state.chat_history:
+                    with st.spinner("Refining follow-up query..."):
+                        rephrased_query = rephrase_question(llm, prompt, st.session_state.chat_history)
+                st.session_state.latest_rephrased_query = rephrased_query
+                
+                # 2. Retrieve Candidate Chunks (Hybrid Search + Reranking)
+                retriever = initialize_retriever(vector_store, k=retrieval_k)
+                with st.spinner("Performing hybrid search and cross-encoder reranking..."):
+                    results = retrieve_chunks(retriever, rephrased_query)
+                st.session_state.latest_retrieval_results = results
+                
+                # Clear previous evaluation when a new question is asked
+                if "latest_eval_result" in st.session_state:
+                    del st.session_state.latest_eval_result
+                
+                # 3. Grounded Answer Generation
+                if results:
+                    with st.spinner("Generating answer..."):
+                        answer = generate_answer(llm, prompt, results, st.session_state.chat_history)
+                else:
+                    answer = "I don't know (no matching context chunks found in database)."
+                    
                 with st.chat_message("assistant"):
-                    st.write(message.content)
+                    st.write(answer)
                     
-        # Listen to user query
-        if prompt := st.chat_input("Ask a question about your stored documentation..."):
-            # Display user message instantly
-            with st.chat_message("user"):
-                st.write(prompt)
-                
-            # Initialize core models
-            llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-            
-            # 1. Standalone Query Refinement (Conversational memory)
-            rephrased_query = prompt
-            if st.session_state.chat_history:
-                with st.spinner("Refining follow-up query..."):
-                    rephrased_query = rephrase_question(llm, prompt, st.session_state.chat_history)
-            st.session_state.latest_rephrased_query = rephrased_query
-            
-            # 2. Retrieve Candidate Chunks (Hybrid Search + Reranking)
-            retriever = initialize_retriever(vector_store, k=retrieval_k)
-            with st.spinner("Performing hybrid search and cross-encoder reranking..."):
-                results = retrieve_chunks(retriever, rephrased_query)
-            st.session_state.latest_retrieval_results = results
-            
-            # 3. Grounded Answer Generation
-            if results:
-                with st.spinner("Generating answer..."):
-                    answer = generate_answer(llm, prompt, results, st.session_state.chat_history)
-            else:
-                answer = "I don't know (no matching context chunks found in database)."
-                
-            with st.chat_message("assistant"):
-                st.write(answer)
-                
-            # Append interaction to dialogue logs
-            st.session_state.chat_history.append(HumanMessage(content=prompt))
-            st.session_state.chat_history.append(AIMessage(content=answer))
-            st.rerun()
+                # Append interaction to dialogue logs
+                st.session_state.chat_history.append(HumanMessage(content=prompt))
+                st.session_state.chat_history.append(AIMessage(content=answer))
+                st.rerun()
 
-    # Column 2: Audit Logs Panel
-    with col2:
-        st.markdown("### 🔍 Retrieval Audit Logs")
-        
-        if st.session_state.latest_rephrased_query:
-            st.info(f"**Last Refined Query Sent to Retriever:**\n`{st.session_state.latest_rephrased_query}`")
+        # Column 2: Audit Logs Panel
+        with col2:
+            st.markdown("### 🔍 Retrieval Audit Logs")
             
-            results = st.session_state.latest_retrieval_results
-            if results:
-                st.markdown(f"**Retrieved Sources (Top {len(results)} after Flashrank Reranking):**")
-                for idx, doc in enumerate(results, 1):
-                    score = doc.metadata.get('relevance_score')
-                    score_val = f"{score:.4f}" if score is not None else "N/A"
-                    source_name = doc.metadata.get('source', 'Unknown')
+            if st.session_state.latest_rephrased_query:
+                st.info(f"**Last Refined Query Sent to Retriever:**\n`{st.session_state.latest_rephrased_query}`")
+                
+                # Real-time Ragas Evaluator
+                st.markdown("#### ⚖️ Real-Time Ragas Evaluation")
+                if st.button("📊 Evaluate Latest Answer"):
+                    latest_human = None
+                    latest_ai = None
+                    # Fetch the last conversation exchange
+                    for msg in reversed(st.session_state.chat_history):
+                        if isinstance(msg, AIMessage) and latest_ai is None:
+                            latest_ai = msg.content
+                        elif isinstance(msg, HumanMessage) and latest_human is None:
+                            latest_human = msg.content
+                        if latest_human is not None and latest_ai is not None:
+                            break
                     
-                    with st.expander(f"Chunk #{idx} | Relevance Score: {score_val} | File: {os.path.basename(source_name)}"):
-                        st.markdown(f"**Relevance Score:** `{score_val}`")
-                        st.markdown(f"**Source File Path:** `{source_name}`")
-                        st.markdown("**Chunk Content:**")
-                        st.code(doc.page_content, language="markdown")
+                    if latest_human and latest_ai and st.session_state.latest_retrieval_results:
+                        contexts = [doc.page_content for doc in st.session_state.latest_retrieval_results]
+                        eval_data = {
+                            "question": [latest_human],
+                            "answer": [latest_ai],
+                            "contexts": [contexts]
+                        }
+                        dataset = Dataset.from_dict(eval_data)
+                        with st.spinner("Evaluating response (using GPT-4o-mini as judge)..."):
+                            try:
+                                from langchain_openai import OpenAIEmbeddings
+                                result = evaluate(
+                                    dataset,
+                                    metrics=[faithfulness, answer_relevancy],
+                                    llm=llm,
+                                    embeddings=OpenAIEmbeddings(model="text-embedding-3-small")
+                                )
+                                st.session_state.latest_eval_result = result
+                                st.success("Evaluation complete!")
+                            except Exception as e:
+                                st.error(f"Evaluation error: {e}")
+                    else:
+                        st.warning("Ask a question first to evaluate.")
+                        
+                # Display metrics if available
+                if "latest_eval_result" in st.session_state and st.session_state.latest_eval_result:
+                    eval_res = st.session_state.latest_eval_result
+                    f_score = eval_res.get("faithfulness", 0.0)
+                    r_score = eval_res.get("answer_relevancy", 0.0)
+                    
+                    ec1, ec2 = st.columns(2)
+                    ec1.metric(
+                        label="Faithfulness", 
+                        value=f"{f_score:.2f}",
+                        help="Measures if the generated answer is strictly grounded in the retrieved context (no hallucinations). 1.0 is perfect."
+                    )
+                    ec2.metric(
+                        label="Answer Relevancy", 
+                        value=f"{r_score:.2f}",
+                        help="Measures how relevant the generated answer is to the original question. 1.0 is perfect."
+                    )
+                st.markdown("---")
+                
+                # Retrieved Chunks Details
+                results = st.session_state.latest_retrieval_results
+                if results:
+                    st.markdown(f"**Retrieved Sources (Top {len(results)} after Flashrank Reranking):**")
+                    for idx, doc in enumerate(results, 1):
+                        score = doc.metadata.get('relevance_score')
+                        score_val = f"{score:.4f}" if score is not None else "N/A"
+                        source_name = doc.metadata.get('source', 'Unknown')
+                        
+                        with st.expander(f"Chunk #{idx} | Relevance Score: {score_val} | File: {os.path.basename(source_name)}"):
+                            st.markdown(f"**Relevance Score:** `{score_val}`")
+                            st.markdown(f"**Source File Path:** `{source_name}`")
+                            st.markdown("**Chunk Content:**")
+                            st.code(doc.page_content, language="markdown")
+                else:
+                    st.warning("No matching source chunks found in the database.")
             else:
-                st.warning("No matching source chunks found in the database.")
-        else:
-            st.markdown(
-                "<div style='border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; padding: 40px; text-align: center; color: #6b7280;'>"
-                "Ask a question in the chat to populate search logs."
-                "</div>",
-                unsafe_allow_html=True
-            )
+                st.markdown(
+                    "<div style='border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; padding: 40px; text-align: center; color: #6b7280;'>"
+                    "Ask a question in the chat to populate search logs."
+                    "</div>",
+                    unsafe_allow_html=True
+                )
+
+    with tab2:
+        st.markdown("### 📊 RAG Pipeline Benchmark Assessment")
+        st.markdown(
+            "This assessment suite runs a batch benchmark over a set of preset evaluation questions. "
+            "Ragas will evaluate the generated answers on **Faithfulness** and **Answer Relevancy** by querying the current retrieval database."
+        )
+
+        # Preset test cases
+        eval_questions = [
+            "What is the annual learning and development budget for employees?",
+            "What are the core hours for remote work?",
+            "Which communication channels are used for daily updates?"
+        ]
+
+        st.markdown("**Benchmark Test Questions:**")
+        for q in eval_questions:
+            st.markdown(f"- `{q}`")
+
+        st.markdown("---")
+
+        if st.button("🚀 Run Batch Evaluation Benchmark"):
+            questions = []
+            answers = []
+            contexts_list = []
+
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+
+            llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+            retriever = initialize_retriever(vector_store, k=retrieval_k)
+
+            total_q = len(eval_questions)
+            for idx, q in enumerate(eval_questions):
+                status_text.text(f"Querying pipeline for Question {idx+1}/{total_q}...")
+
+                # 1. Rephrase (No memory history for batch query items)
+                rephrased_query = rephrase_question(llm, q, [])
+
+                # 2. Retrieve
+                results = retrieve_chunks(retriever, rephrased_query)
+                contexts = [doc.page_content for doc in results]
+
+                # 3. Generate
+                answer = generate_answer(llm, q, results, [])
+
+                questions.append(q)
+                answers.append(answer)
+                contexts_list.append(contexts)
+
+                progress_bar.progress(int((idx + 1) / total_q * 100))
+
+            status_text.text("Running Ragas evaluation (using GPT-4o-mini as judge)...")
+
+            try:
+                # Prepare dataset
+                eval_data = {
+                    "question": questions,
+                    "answer": answers,
+                    "contexts": contexts_list
+                }
+                dataset = Dataset.from_dict(eval_data)
+
+                # Evaluate
+                from langchain_openai import OpenAIEmbeddings
+                result = evaluate(
+                    dataset,
+                    metrics=[faithfulness, answer_relevancy],
+                    llm=llm,
+                    embeddings=OpenAIEmbeddings(model="text-embedding-3-small")
+                )
+
+                status_text.text("Benchmark complete!")
+                progress_bar.empty()
+
+                # Display metrics
+                f_avg = result.get("faithfulness", 0.0)
+                r_avg = result.get("answer_relevancy", 0.0)
+
+                mc1, mc2 = st.columns(2)
+                mc1.metric("Average Faithfulness", f"{f_avg:.2f}", help="Grounded consistency across all benchmark cases.")
+                mc2.metric("Average Answer Relevancy", f"{r_avg:.2f}", help="Semantic alignment with questions across all benchmark cases.")
+
+                # Prepare summary dataframe
+                scores_df = result.to_pandas()
+                # Clean up the output columns for display
+                display_df = scores_df[["question", "answer", "faithfulness", "answer_relevancy"]].copy()
+                display_df.columns = ["Question", "Generated Answer", "Faithfulness", "Answer Relevancy"]
+
+                st.markdown("### 📋 Case-by-Case Breakdown")
+                st.dataframe(display_df, use_container_width=True)
+
+                # Plot scores comparison
+                st.markdown("### 📈 Metric Scores Comparison")
+                chart_data = display_df.set_index("Question")[["Faithfulness", "Answer Relevancy"]]
+                st.bar_chart(chart_data)
+
+            except Exception as e:
+                status_text.text("Error during evaluation.")
+                progress_bar.empty()
+                st.error(f"Benchmark error: {e}")

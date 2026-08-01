@@ -8,3 +8,6 @@ langchain-chroma
 rank_bm25
 flashrank
 streamlit
+ragas
+datasets
+langchain-google-vertexai

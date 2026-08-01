@@ -6,9 +6,9 @@ An incremental Retrieval-Augmented Generation (RAG) Q&A system built in Python u
 
 ---
 
-## Current Status: Completed Stage 8
+## Current Status: Completed Stage 9
 
-We have completed the core command-line and Streamlit Web UI dashboard for the RAG Q&A system, allowing both interactive terminal querying and browser-based chat, document upload, and retrieval auditing.
+We have completed the RAG pipeline assessment integration using the **Ragas** framework. The Streamlit dashboard now supports both real-time evaluation of chatbot responses and batch benchmark suite execution over preset queries (Faithfulness and Answer Relevancy).
 
 ### Project Structure
 - `docs/`: Holds the local document library (e.g., Markdown, Text, and PDF files).
@@ -16,7 +16,7 @@ We have completed the core command-line and Streamlit Web UI dashboard for the R
 - `assets/`: Stores the project architecture diagrams and assets.
 - `ingest.py`: Loads, chunks, embeds, and saves document vectors (modular library & CLI).
 - `query.py`: Interactive Q&A loop with conversational memory and follow-up query rephrasing (modular library & CLI).
-- `app.py`: Streamlit-based web dashboard providing interactive chat, upload interface, chunk adjustments, and real-time retrieval audit logs.
+- `app.py`: Streamlit-based web dashboard providing interactive chat, upload interface, chunk adjustments, real-time retrieval audit logs, and integrated Ragas assessment (real-time + batch benchmark).
 - `.env`: Configures API keys and tracing settings (ignored by Git).
 - `.gitignore`: Ensures venv, cache, database folders, and credentials are not committed.
 
@@ -57,6 +57,12 @@ We have completed the core command-line and Streamlit Web UI dashboard for the R
 - Embeds side-by-side components to separate the conversation from the search audit logs.
 - Exposes controls to adjust chunk parameters, upload source documents, and rebuild the Chroma vector database on-the-fly.
 - Renders detailed expander audit summaries showing refined queries and raw source chunks with relevance scores.
+
+### 9. Stage 9: RAG Assessment
+- Integrates the **Ragas** evaluation framework to measure the quality of the system pipeline.
+- Real-time scoring computes `Faithfulness` and `Answer Relevancy` for the latest response on-demand.
+- Batch Evaluation Benchmark runs queries against a test suite, generating metrics summaries, tabular breakdowns, and comparative bar charts.
+- Employs an LLM-as-a-judge model via GPT-4o-mini to score responses objectively.
 
 ---
 
@@ -101,6 +107,6 @@ Open `http://localhost:8501` in your browser. This dashboard lets you upload fil
 
 ## Next Steps / Future Work
 
-When returning to this project, the next planned enhancements are:
-1. **Stage 9: RAG Assessment**
-   - Add RAG evaluation frameworks (e.g., Ragas or TruLens) to measure faithfulness, answer relevance, and context recall.
+All core building blocks of the incremental RAG pipeline are now complete! Future production-grade enhancements include:
+1. **Production Deployment**: Containerizing the setup with Docker and deploying the Streamlit UI to a cloud service.
+2. **Context Caching & Semantic Cache**: Adding Redis-based semantic cache to avoid duplicate OpenAI generation costs for identical queries.

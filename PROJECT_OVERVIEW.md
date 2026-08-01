@@ -29,6 +29,11 @@ RAG Q&A System is a production-grade, local-first **Retrieval-Augmented Generati
 *   **Live Parameter Tuning:** Ingest documents, adjust chunk sizes/overlaps, and slide retrieval candidate sizes (K) dynamically.
 *   **Visual Retrieval Explorer:** Collapsible source viewer showing document locations, text chunks, and exact rerank scores.
 
+### 📊 RAG Pipeline Assessment (Ragas)
+*   **Response Scoring:** Evaluates answers on-demand using the **Ragas** framework, calculating `Faithfulness` (to context) and `Answer Relevancy` (to question).
+*   **Batch Benchmarking:** Runs preset validation tests on the database, producing metrics summaries, detailed evaluation tables, and comparative charts.
+*   **Objective Judge:** Leverages GPT-4o-mini as an automated evaluation judge to maintain score consistency.
+
 ---
 
 ## 🏗️ Architecture & Component Flow
@@ -140,6 +145,8 @@ sequenceDiagram
     ```bash
     streamlit run app.py
     ```
+    - Navigate to the **💬 Chat & Audit** tab to chat with the system and trigger real-time evaluation.
+    - Navigate to the **📊 RAG Assessment Suite** tab to run batch evaluation benchmarks.
 
 ---
 
