@@ -311,7 +311,7 @@ else:
                         
                 # Display metrics if available
                 if "latest_eval_result" in st.session_state and st.session_state.latest_eval_result:
-                    eval_res = st.session_state.latest_eval_result
+                    eval_res = dict(st.session_state.latest_eval_result)
                     f_score = eval_res.get("faithfulness", 0.0)
                     r_score = eval_res.get("answer_relevancy", 0.0)
                     
@@ -427,8 +427,9 @@ else:
                 progress_bar.empty()
 
                 # Display metrics
-                f_avg = result.get("faithfulness", 0.0)
-                r_avg = result.get("answer_relevancy", 0.0)
+                result_dict = dict(result)
+                f_avg = result_dict.get("faithfulness", 0.0)
+                r_avg = result_dict.get("answer_relevancy", 0.0)
 
                 mc1, mc2 = st.columns(2)
                 mc1.metric("Average Faithfulness", f"{f_avg:.2f}", help="Grounded consistency across all benchmark cases.")
