@@ -440,7 +440,7 @@ else:
                 # Prepare summary dataframe
                 scores_df = result_df
                 # Clean up the output columns for display
-                display_df = scores_df[["question", "answer", "faithfulness", "answer_relevancy"]].copy()
+                display_df = scores_df[["user_input", "response", "faithfulness", "answer_relevancy"]].copy()
                 display_df.columns = ["Question", "Generated Answer", "Faithfulness", "Answer Relevancy"]
 
                 st.markdown("### 📋 Case-by-Case Breakdown")
