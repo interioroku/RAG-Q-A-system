@@ -295,6 +295,7 @@ else:
                         with st.spinner("Evaluating response (using GPT-4o-mini as judge)..."):
                             try:
                                 from langchain_openai import OpenAIEmbeddings
+                                llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
                                 result = evaluate(
                                     dataset,
                                     metrics=[faithfulness, answer_relevancy],
