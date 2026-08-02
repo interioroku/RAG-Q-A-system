@@ -311,9 +311,10 @@ else:
                         
                 # Display metrics if available
                 if "latest_eval_result" in st.session_state and st.session_state.latest_eval_result:
-                    eval_res = dict(st.session_state.latest_eval_result)
-                    f_score = eval_res.get("faithfulness", 0.0)
-                    r_score = eval_res.get("answer_relevancy", 0.0)
+                    eval_res_df = st.session_state.latest_eval_result.to_pandas()
+                    eval_res_dict = eval_res_df.mean(numeric_only=True).to_dict()
+                    f_score = eval_res_dict.get("faithfulness", 0.0)
+                    r_score = eval_res_dict.get("answer_relevancy", 0.0)
                     
                     ec1, ec2 = st.columns(2)
                     ec1.metric(
@@ -427,7 +428,8 @@ else:
                 progress_bar.empty()
 
                 # Display metrics
-                result_dict = dict(result)
+                result_df = result.to_pandas()
+                result_dict = result_df.mean(numeric_only=True).to_dict()
                 f_avg = result_dict.get("faithfulness", 0.0)
                 r_avg = result_dict.get("answer_relevancy", 0.0)
 
@@ -436,7 +438,7 @@ else:
                 mc2.metric("Average Answer Relevancy", f"{r_avg:.2f}", help="Semantic alignment with questions across all benchmark cases.")
 
                 # Prepare summary dataframe
-                scores_df = result.to_pandas()
+                scores_df = result_df
                 # Clean up the output columns for display
                 display_df = scores_df[["question", "answer", "faithfulness", "answer_relevancy"]].copy()
                 display_df.columns = ["Question", "Generated Answer", "Faithfulness", "Answer Relevancy"]
