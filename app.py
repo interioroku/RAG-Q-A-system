@@ -338,9 +338,11 @@ else:
                         score_val = f"{score:.4f}" if score is not None else "N/A"
                         source_name = doc.metadata.get('source', 'Unknown')
                         
-                        with st.expander(f"Chunk #{idx} | Relevance Score: {score_val} | File: {os.path.basename(source_name)}"):
+                        page = doc.metadata.get('page')
+                        page_suffix = f" | Page {page + 1}" if page is not None else ""
+                        with st.expander(f"Chunk #{idx} | Relevance Score: {score_val} | File: {os.path.basename(source_name)}{page_suffix}"):
                             st.markdown(f"**Relevance Score:** `{score_val}`")
-                            st.markdown(f"**Source File Path:** `{source_name}`")
+                            st.markdown(f"**Source File Path:** `{source_name}`{f' | **Page:** `{page + 1}`' if page is not None else ''}")
                             st.markdown("**Chunk Content:**")
                             st.code(doc.page_content, language="markdown")
                 else:

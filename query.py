@@ -175,7 +175,9 @@ if __name__ == "__main__":
         for idx, doc in enumerate(results, 1):
             score = doc.metadata.get('relevance_score')
             score_str = f"{score:.4f}" if score is not None else "N/A"
-            print(f"[{idx}] Source: {doc.metadata.get('source')} (Relevance Score: {score_str})")
+            page = doc.metadata.get('page')
+            page_str = f" (Page {page + 1})" if page is not None else ""
+            print(f"[{idx}] Source: {doc.metadata.get('source')}{page_str} (Relevance Score: {score_str})")
         print("\n" + "-" * 60 + "\n")
         
         # Append to chat history
